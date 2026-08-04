@@ -621,42 +621,66 @@
     setTimeout(()=> toastEl.classList.remove('show'), 1800);
   }
 
-  // ---------- Storage helpers ----------
-  const INDEX_KEY = 'tagroom-index';
+  // ---------- Storage helpers (IndexedDB — works on any hosted page) ----------
+  const DB_NAME = 'tagroom-db';
+  const STORE_NAME = 'items';
+  let dbPromise = null;
 
-  async function loadIndex(){
-    try{
-      const res = await window.storage.get(INDEX_KEY, false);
-      if(!res) return [];
-      return JSON.parse(res.value);
-    }catch(e){ return []; }
+  function openDB(){
+    if(dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if(!db.objectStoreNames.contains(STORE_NAME)){
+          db.createObjectStore(STORE_NAME, { keyPath: 'code' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return dbPromise;
   }
-  async function saveIndex(codes){
-    try{ await window.storage.set(INDEX_KEY, JSON.stringify(codes), false); }
-    catch(e){ console.error('Failed to save index', e); }
-  }
-  async function loadItem(code){
-    try{
-      const res = await window.storage.get('tagroom-item:' + code, false);
-      if(!res) return null;
-      return JSON.parse(res.value);
-    }catch(e){ return null; }
-  }
+
   async function saveItemRecord(item){
-    await window.storage.set('tagroom-item:' + item.code, JSON.stringify(item), false);
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(item);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
   }
+
   async function deleteItemRecord(code){
-    try{ await window.storage.delete('tagroom-item:' + code, false); }catch(e){}
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).delete(code);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
   }
+
+  async function getAllItems(){
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   async function refreshGallery(){
-    const codes = await loadIndex();
-    const items = [];
-    for(const c of codes){
-      const it = await loadItem(c);
-      if(it) items.push(it);
+    try{
+      const items = await getAllItems();
+      items.sort((a,b)=> b.savedAt - a.savedAt);
+      allItems = items;
+    }catch(e){
+      console.error('Failed to load items', e);
+      allItems = [];
     }
-    items.sort((a,b)=> b.savedAt - a.savedAt);
-    allItems = items;
     renderGallery();
   }
   function renderGallery(){
@@ -864,14 +888,10 @@
     try{
       const item = { code: confirmedCode, photo: lastPhotoDataUrl, savedAt: Date.now() };
       await saveItemRecord(item);
-      const codes = await loadIndex();
-      if(!codes.includes(item.code)){
-        codes.unshift(item.code);
-        await saveIndex(codes);
-      }
       showToast('Saved · ' + item.code);
       await refreshGallery();
     }catch(e){
+      console.error('Save error', e);
       showToast('Save failed — try again');
     }finally{
       setTimeout(resetToIdle, 500);
@@ -902,13 +922,11 @@
     deleteBtn.disabled = true;
     try{
       await deleteItemRecord(code);
-      const codes = await loadIndex();
-      const next = codes.filter(c => c !== code);
-      await saveIndex(next);
       showToast('Deleted · ' + code);
       closeModal();
       await refreshGallery();
     }catch(e){
+      console.error('Delete error', e);
       showToast('Delete failed — try again');
     }finally{
       deleteBtn.disabled = false;
