@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Tag Room — Item Photo Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #EDE9DF;
+    --paper-dim: #E2DCCE;
+    --ink: #231F1C;
+    --ink-soft: #5B564E;
+    --tag-yellow: #D9A441;
+    --tag-yellow-deep: #B9822C;
+    --line: #C9C1AF;
+    --card: #F7F4EC;
+    --danger: #A8442E;
+    --good: #4B6A4F;
+    --radius: 10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(35,31,28,0.05) 1px, transparent 0);
+    background-size: 14px 14px;
+    pointer-events:none;
+    z-index:0;
+  }
+  .app{
+    position:relative; z-index:1;
+    max-width:520px;
+    margin:0 auto;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+
+  header{
+    padding:22px 20px 16px;
+    border-bottom:2px dashed var(--line);
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--tag-yellow-deep);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:7px;height:7px;
+    border-radius:50%;
+    background:var(--tag-yellow-deep);
+    display:inline-block;
+  }
+  h1{
+    font-family:'Oswald', sans-serif;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.01em;
+    font-size:30px;
+    margin:6px 0 4px;
+  }
+  .sub{
+    color:var(--ink-soft);
+    font-size:13.5px;
+    line-height:1.45;
+    max-width:44ch;
+  }
+
+  main{
+    flex:1;
+    padding:18px 20px 100px;
+  }
+
+  .flow-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    position:relative;
+    overflow:hidden;
+    margin-bottom:24px;
+  }
+  .flow-card::after{
+    content:"";
+    position:absolute;
+    top:14px; right:14px;
+    width:16px; height:16px;
+    border-radius:50%;
+    background:var(--paper);
+    border:1.5px solid var(--line);
+    box-shadow: inset 0 0 0 3px var(--card);
+  }
+
+  .step-indicator{
+    display:flex;
+    gap:6px;
+    margin-bottom:12px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+  }
+  .step-indicator .step{
+    padding:4px 9px;
+    border-radius:20px;
+    background:var(--paper-dim);
+    color:var(--ink-soft);
+    border:1px solid var(--line);
+  }
+  .step-indicator .step.active{
+    background:var(--tag-yellow);
+    color:#231F1C;
+    border-color:var(--tag-yellow-deep);
+  }
+  .step-indicator .step.done{
+    background:var(--good);
+    color:#F7F4EC;
+    border-color:var(--good);
+  }
+
+  .stage{
+    background:#151412;
+    border-radius:7px;
+    aspect-ratio: 4/3;
+    position:relative;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .stage video, .stage img.captured{
+    width:100%; height:100%; object-fit:cover;
+    display:block;
+  }
+  .stage .placeholder{
+    color:#8B8577;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    text-align:center;
+    padding:20px;
+    letter-spacing:0.03em;
+  }
+  .scan-frame{
+    position:absolute;
+    left:8%; right:8%; top:34%; bottom:34%;
+    border:2px solid var(--tag-yellow);
+    border-radius:6px;
+    display:none;
+  }
+  .stage.scanning .scan-frame{ display:block; }
+  .scan-line{
+    position:absolute; left:8%; right:8%; height:2px;
+    background:linear-gradient(90deg, transparent, var(--tag-yellow), transparent);
+    top:34%; opacity:0;
+  }
+  .stage.scanning .scan-line{
+    opacity:1;
+    animation:scan 1.6s linear infinite;
+  }
+  @keyframes scan{
+    0%{ top:35%; }
+    50%{ top:64%; }
+    100%{ top:35%; }
+  }
+  .scan-caption{
+    position:absolute;
+    bottom:10px; left:0; right:0;
+    text-align:center;
+    color:#EDE9DF;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    letter-spacing:0.04em;
+    display:none;
+  }
+  .stage.scanning .scan-caption{ display:block; }
+
+  .code-found-overlay{
+    position:absolute; inset:0;
+    background:rgba(21,20,18,0.86);
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:20px;
+  }
+  .code-found-overlay.show{ display:flex; }
+  .code-found-overlay .tick{
+    font-size:30px;
+    margin-bottom:6px;
+  }
+  .code-found-overlay .found-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--tag-yellow);
+    margin-bottom:6px;
+  }
+  .code-found-overlay .found-code{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:22px;
+    font-weight:600;
+    color:#F7F4EC;
+    word-break:break-all;
+  }
+
+  .cam-controls{
+    display:flex;
+    gap:10px;
+    margin-top:12px;
+  }
+  button{
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size:14px;
+    border:none;
+    border-radius:8px;
+    padding:12px 16px;
+    cursor:pointer;
+    transition: transform .08s ease, opacity .15s ease;
+  }
+  button:active{ transform: scale(0.97); }
+  .btn-primary{ background:var(--ink); color:var(--paper); flex:1; }
+  .btn-accent{ background:var(--tag-yellow); color:#231F1C; flex:1; }
+  .btn-ghost{ background:transparent; color:var(--ink-soft); border:1px solid var(--line); }
+  .btn-danger{ background:transparent; color:var(--danger); border:1px solid var(--danger); }
+  button:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  .manual-fallback{
+    margin-top:12px;
+    text-align:center;
+    display:none;
+  }
+  .manual-fallback.show{ display:block; }
+  .manual-fallback a{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    text-decoration:underline;
+    cursor:pointer;
+  }
+  .code-row{
+    display:flex; gap:8px; margin-top:12px;
+    display:none;
+  }
+  .code-row.show{ display:flex; }
+  .code-row input{
+    flex:1;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:16px;
+    letter-spacing:0.04em;
+    padding:12px 12px;
+    border-radius:8px;
+    border:1.5px solid var(--line);
+    background:#FFFDF8;
+    color:var(--ink);
+  }
+  .code-row input:focus{
+    outline:none;
+    border-color:var(--tag-yellow-deep);
+  }
+
+  .hint{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-top:8px;
+    line-height:1.5;
+    text-align:center;
+  }
+
+  .section-divider{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin: 8px 0 14px;
+  }
+  .section-divider .label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    white-space:nowrap;
+  }
+  .section-divider .rule{
+    flex:1;
+    border-top:1px dashed var(--line);
+  }
+
+  .search-row{
+    margin-bottom:14px;
+  }
+  .search-row input{
+    width:100%;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    padding:10px 12px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--ink);
+  }
+  .search-row input:focus{ outline:none; border-color:var(--tag-yellow-deep); }
+
+  .empty-state{
+    text-align:center;
+    padding:50px 20px;
+    color:var(--ink-soft);
+  }
+  .empty-state .glyph{
+    font-size:34px;
+    margin-bottom:10px;
+  }
+  .empty-state p{
+    font-size:13.5px;
+    line-height:1.5;
+    max-width:32ch;
+    margin:0 auto;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap:12px;
+  }
+  .tag-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+    cursor:pointer;
+    position:relative;
+  }
+  .tag-card .thumb{
+    aspect-ratio:1/1;
+    background:#151412;
+    overflow:hidden;
+  }
+  .tag-card .thumb img{
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+  .tag-card .meta{
+    padding:9px 10px 11px;
+    border-top:1px dashed var(--line);
+  }
+  .tag-card .meta .code{
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600;
+    font-size:13px;
+    letter-spacing:0.02em;
+    word-break:break-all;
+  }
+  .tag-card .meta .date{
+    font-size:10.5px;
+    color:var(--ink-soft);
+    margin-top:2px;
+  }
+  .tag-card .hole{
+    position:absolute;
+    top:8px; left:8px;
+    width:11px; height:11px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.85);
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35);
+    z-index:2;
+  }
+
+  .modal-backdrop{
+    position:fixed; inset:0;
+    background:rgba(21,20,18,0.82);
+    z-index:50;
+    display:none;
+    align-items:flex-end;
+    justify-content:center;
+  }
+  .modal-backdrop.open{ display:flex; }
+  .modal{
+    background:var(--paper);
+    width:100%;
+    max-width:520px;
+    border-radius:16px 16px 0 0;
+    padding:18px 18px 26px;
+    max-height:88vh;
+    overflow-y:auto;
+  }
+  .modal-handle{
+    width:36px; height:4px;
+    background:var(--line);
+    border-radius:3px;
+    margin:0 auto 14px;
+  }
+  .modal img{
+    width:100%;
+    border-radius:8px;
+    display:block;
+    margin-bottom:14px;
+  }
+  .modal .code-display{
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600;
+    font-size:19px;
+    letter-spacing:0.03em;
+  }
+  .modal .date-display{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:3px;
+    margin-bottom:16px;
+  }
+  .modal-actions{
+    display:flex; gap:10px;
+  }
+
+  .toast{
+    position:fixed;
+    bottom:20px; left:50%;
+    transform:translateX(-50%) translateY(8px);
+    background:var(--ink);
+    color:var(--paper);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    padding:10px 16px;
+    border-radius:20px;
+    opacity:0;
+    pointer-events:none;
+    transition: opacity .2s ease, transform .2s ease;
+    z-index:60;
+    white-space:nowrap;
+  }
+  .toast.show{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+  }
+
+  .count-pill{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    background:var(--paper-dim);
+    border:1px solid var(--line);
+    padding:2px 8px;
+    border-radius:12px;
+    color:var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="eyebrow">Local &middot; on this device only</div>
+    <h1>Tag Room</h1>
+    <div class="sub">Scan the barcode, snap the item — both link automatically. No typing.</div>
+  </header>
+
+  <main>
+    <div class="flow-card">
+      <div class="step-indicator">
+        <span class="step active" id="step1">1 · Scan Code</span>
+        <span class="step" id="step2">2 · Photo Item</span>
+      </div>
+
+      <div class="stage" id="stage">
+        <div class="placeholder" id="placeholder">Tap "Scan Barcode"<br>to start</div>
+        <video id="video" autoplay playsinline muted style="display:none;"></video>
+        <img id="captured" class="captured" style="display:none;" alt="Captured item">
+        <div class="scan-frame"></div>
+        <div class="scan-line"></div>
+        <div class="scan-caption">Hold steady over the barcode</div>
+        <div class="code-found-overlay" id="codeFoundOverlay">
+          <div class="tick">✓</div>
+          <div class="found-label">Code Detected</div>
+          <div class="found-code" id="foundCodeText"></div>
+        </div>
+      </div>
+
+      <div class="cam-controls" id="camControlsIdle">
+        <button class="btn-primary" id="openCamBtn" style="width:100%;">Scan Barcode</button>
+      </div>
+
+      <div class="cam-controls" id="camControlsScanning" style="display:none;">
+        <button class="btn-ghost" id="cancelCamBtn" style="width:100%;">Cancel</button>
+      </div>
+
+      <div class="manual-fallback" id="manualFallback">
+        <a id="manualLink">Not finding it? Enter code manually</a>
+      </div>
+      <div class="code-row" id="codeRow">
+        <input type="text" id="codeInput" placeholder="Type item code" autocomplete="off" autocapitalize="characters">
+        <button class="btn-accent" id="useTypedCodeBtn">Use</button>
+      </div>
+
+      <div class="cam-controls" id="codeFoundControls" style="display:none;">
+        <button class="btn-accent" id="proceedToPhotoBtn">Photograph Item</button>
+        <button class="btn-ghost" id="rescanBtn">Rescan</button>
+      </div>
+
+      <div class="cam-controls" id="camControlsPhotoLive" style="display:none;">
+        <button class="btn-accent" id="captureBtn">Capture</button>
+        <button class="btn-ghost" id="cancelPhotoBtn">Cancel</button>
+      </div>
+
+      <div id="savingState" style="display:none;">
+        <div class="hint" id="savingHint">Saving…</div>
+      </div>
+    </div>
+
+    <div class="section-divider">
+      <span class="label">Logged Items</span>
+      <span class="rule"></span>
+      <span class="count-pill" id="countPill">0</span>
+    </div>
+
+    <div class="search-row">
+      <input type="text" id="searchInput" placeholder="Search by code…">
+    </div>
+
+    <div id="galleryWrap">
+      <div class="empty-state" id="emptyState">
+        <div class="glyph">🏷️</div>
+        <p>Nothing logged yet. Scan your first item's barcode above to get started.</p>
+      </div>
+      <div class="grid" id="grid" style="display:none;"></div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <img id="modalImg" src="" alt="Item photo">
+    <div class="code-display" id="modalCode"></div>
+    <div class="date-display" id="modalDate"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="closeModalBtn" style="flex:1;">Close</button>
+      <button class="btn-danger" id="deleteBtn" style="flex:1;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const placeholder = document.getElementById('placeholder');
+  const video = document.getElementById('video');
+  const capturedImg = document.getElementById('captured');
+  const codeFoundOverlay = document.getElementById('codeFoundOverlay');
+  const foundCodeText = document.getElementById('foundCodeText');
+
+  const step1 = document.getElementById('step1');
+  const step2 = document.getElementById('step2');
+
+  const openCamBtn = document.getElementById('openCamBtn');
+  const camControlsIdle = document.getElementById('camControlsIdle');
+  const camControlsScanning = document.getElementById('camControlsScanning');
+  const cancelCamBtn = document.getElementById('cancelCamBtn');
+
+  const manualFallback = document.getElementById('manualFallback');
+  const manualLink = document.getElementById('manualLink');
+  const codeRow = document.getElementById('codeRow');
+  const codeInput = document.getElementById('codeInput');
+  const useTypedCodeBtn = document.getElementById('useTypedCodeBtn');
+
+  const codeFoundControls = document.getElementById('codeFoundControls');
+  const proceedToPhotoBtn = document.getElementById('proceedToPhotoBtn');
+  const rescanBtn = document.getElementById('rescanBtn');
+
+  const camControlsPhotoLive = document.getElementById('camControlsPhotoLive');
+  const captureBtn = document.getElementById('captureBtn');
+  const cancelPhotoBtn = document.getElementById('cancelPhotoBtn');
+
+  const savingState = document.getElementById('savingState');
+  const savingHint = document.getElementById('savingHint');
+
+  const searchInput = document.getElementById('searchInput');
+  const grid = document.getElementById('grid');
+  const emptyState = document.getElementById('emptyState');
+  const countPill = document.getElementById('countPill');
+
+  const modalBackdrop = document.getElementById('modalBackdrop');
+  const modalImg = document.getElementById('modalImg');
+  const modalCode = document.getElementById('modalCode');
+  const modalDate = document.getElementById('modalDate');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
+
+  const toastEl = document.getElementById('toast');
+
+  let stream = null;
+  let lastPhotoDataUrl = null;
+  let confirmedCode = null;
+  let detectTimer = null;
+  let noDetectTimeout = null;
+  let barcodeDetector = null;
+  let allItems = [];
+  let currentModalCode = null;
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(()=> toastEl.classList.remove('show'), 1800);
+  }
+
+  // ---------- Storage helpers ----------
+  const INDEX_KEY = 'tagroom-index';
+
+  async function loadIndex(){
+    try{
+      const res = await window.storage.get(INDEX_KEY, false);
+      if(!res) return [];
+      return JSON.parse(res.value);
+    }catch(e){ return []; }
+  }
+  async function saveIndex(codes){
+    try{ await window.storage.set(INDEX_KEY, JSON.stringify(codes), false); }
+    catch(e){ console.error('Failed to save index', e); }
+  }
+  async function loadItem(code){
+    try{
+      const res = await window.storage.get('tagroom-item:' + code, false);
+      if(!res) return null;
+      return JSON.parse(res.value);
+    }catch(e){ return null; }
+  }
+  async function saveItemRecord(item){
+    await window.storage.set('tagroom-item:' + item.code, JSON.stringify(item), false);
+  }
+  async function deleteItemRecord(code){
+    try{ await window.storage.delete('tagroom-item:' + code, false); }catch(e){}
+  }
+  async function refreshGallery(){
+    const codes = await loadIndex();
+    const items = [];
+    for(const c of codes){
+      const it = await loadItem(c);
+      if(it) items.push(it);
+    }
+    items.sort((a,b)=> b.savedAt - a.savedAt);
+    allItems = items;
+    renderGallery();
+  }
+  function renderGallery(){
+    const q = searchInput.value.trim().toLowerCase();
+    const filtered = q ? allItems.filter(i => i.code.toLowerCase().includes(q)) : allItems;
+    countPill.textContent = allItems.length;
+    if(allItems.length === 0){
+      emptyState.style.display = 'block';
+      grid.style.display = 'none';
+      return;
+    }
+    emptyState.style.display = 'none';
+    grid.style.display = 'grid';
+    grid.innerHTML = '';
+    filtered.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'tag-card';
+      const d = new Date(item.savedAt);
+      const dateStr = d.toLocaleDateString(undefined, {month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
+      card.innerHTML = `
+        <div class="hole"></div>
+        <div class="thumb"><img src="${item.photo}" alt="${item.code}"></div>
+        <div class="meta">
+          <div class="code">${escapeHtml(item.code)}</div>
+          <div class="date">${dateStr}</div>
+        </div>
+      `;
+      card.addEventListener('click', () => openModal(item));
+      grid.appendChild(card);
+    });
+  }
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ---------- UI state machine ----------
+  function resetToIdle(){
+    stopStream();
+    stopBarcodeDetection();
+    confirmedCode = null;
+    lastPhotoDataUrl = null;
+    codeInput.value = '';
+
+    step1.className = 'step active';
+    step2.className = 'step';
+
+    placeholder.style.display = 'flex';
+    video.style.display = 'none';
+    capturedImg.style.display = 'none';
+    stage.classList.remove('scanning');
+    codeFoundOverlay.classList.remove('show');
+
+    camControlsIdle.style.display = 'flex';
+    camControlsScanning.style.display = 'none';
+    manualFallback.classList.remove('show');
+    codeRow.classList.remove('show');
+    codeFoundControls.style.display = 'none';
+    camControlsPhotoLive.style.display = 'none';
+    savingState.style.display = 'none';
+  }
+
+  function stopStream(){
+    if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+    video.srcObject = null;
+  }
+
+  // ---------- Step 1: Scan ----------
+  async function startScan(){
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width:{ideal:1280}, height:{ideal:960} },
+        audio:false
+      });
+      video.srcObject = stream;
+      placeholder.style.display = 'none';
+      video.style.display = 'block';
+      stage.classList.add('scanning');
+      camControlsIdle.style.display = 'none';
+      camControlsScanning.style.display = 'flex';
+
+      if('BarcodeDetector' in window){
+        try{
+          barcodeDetector = new BarcodeDetector({
+            formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','code_93','codabar','itf','qr_code']
+          });
+          runDetectionLoop();
+          noDetectTimeout = setTimeout(() => {
+            manualFallback.classList.add('show');
+          }, 4500);
+        }catch(e){
+          manualFallback.classList.add('show');
+          codeRow.classList.add('show');
+        }
+      } else {
+        manualFallback.classList.add('show');
+      }
+    }catch(e){
+      showToast('Camera unavailable — check permissions');
+      resetToIdle();
+    }
+  }
+
+  function runDetectionLoop(){
+    detectTimer = setInterval(async () => {
+      if(!video.srcObject || !barcodeDetector) return;
+      try{
+        const results = await barcodeDetector.detect(video);
+        if(results && results.length > 0 && results[0].rawValue){
+          onCodeDetected(results[0].rawValue);
+        }
+      }catch(err){ /* frame failed, ignore */ }
+    }, 450);
+  }
+
+  function stopBarcodeDetection(){
+    if(detectTimer){ clearInterval(detectTimer); detectTimer = null; }
+    if(noDetectTimeout){ clearTimeout(noDetectTimeout); noDetectTimeout = null; }
+    barcodeDetector = null;
+  }
+
+  function onCodeDetected(value){
+    if(confirmedCode) return; // already handled
+    confirmedCode = value;
+    stopBarcodeDetection();
+    if(navigator.vibrate) navigator.vibrate(60);
+
+    foundCodeText.textContent = value;
+    codeFoundOverlay.classList.add('show');
+    stage.classList.remove('scanning');
+    stopStream();
+
+    camControlsScanning.style.display = 'none';
+    manualFallback.classList.remove('show');
+    codeRow.classList.remove('show');
+    codeFoundControls.style.display = 'flex';
+
+    showToast('Barcode read successfully');
+  }
+
+  manualLink.addEventListener('click', () => {
+    codeRow.classList.add('show');
+    codeInput.focus();
+  });
+
+  useTypedCodeBtn.addEventListener('click', () => {
+    const val = codeInput.value.trim();
+    if(!val){ showToast('Type a code first'); return; }
+    onCodeDetected(val);
+  });
+
+  openCamBtn.addEventListener('click', startScan);
+  cancelCamBtn.addEventListener('click', resetToIdle);
+
+  rescanBtn.addEventListener('click', () => {
+    confirmedCode = null;
+    codeFoundOverlay.classList.remove('show');
+    codeFoundControls.style.display = 'none';
+    placeholder.style.display = 'flex';
+    startScan();
+  });
+
+  // ---------- Step 2: Photo ----------
+  proceedToPhotoBtn.addEventListener('click', async () => {
+    step1.className = 'step done';
+    step2.className = 'step active';
+    codeFoundOverlay.classList.remove('show');
+    codeFoundControls.style.display = 'none';
+
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width:{ideal:1280}, height:{ideal:960} },
+        audio:false
+      });
+      video.srcObject = stream;
+      video.style.display = 'block';
+      camControlsPhotoLive.style.display = 'flex';
+    }catch(e){
+      showToast('Camera unavailable — check permissions');
+    }
+  });
+
+  cancelPhotoBtn.addEventListener('click', resetToIdle);
+
+  captureBtn.addEventListener('click', async () => {
+    const canvas = document.createElement('canvas');
+    const maxW = 900;
+    const scale = Math.min(1, maxW / video.videoWidth);
+    canvas.width = video.videoWidth * scale;
+    canvas.height = video.videoHeight * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    lastPhotoDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+
+    capturedImg.src = lastPhotoDataUrl;
+    capturedImg.style.display = 'block';
+    video.style.display = 'none';
+    stopStream();
+
+    camControlsPhotoLive.style.display = 'none';
+    savingState.style.display = 'block';
+    savingHint.textContent = 'Saving…';
+
+    try{
+      const item = { code: confirmedCode, photo: lastPhotoDataUrl, savedAt: Date.now() };
+      await saveItemRecord(item);
+      const codes = await loadIndex();
+      if(!codes.includes(item.code)){
+        codes.unshift(item.code);
+        await saveIndex(codes);
+      }
+      showToast('Saved · ' + item.code);
+      await refreshGallery();
+    }catch(e){
+      showToast('Save failed — try again');
+    }finally{
+      setTimeout(resetToIdle, 500);
+    }
+  });
+
+  searchInput.addEventListener('input', renderGallery);
+
+  // ---------- Modal ----------
+  function openModal(item){
+    currentModalCode = item.code;
+    modalImg.src = item.photo;
+    modalCode.textContent = item.code;
+    const d = new Date(item.savedAt);
+    modalDate.textContent = 'Logged ' + d.toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) + ' at ' + d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
+    modalBackdrop.classList.add('open');
+  }
+  function closeModal(){
+    modalBackdrop.classList.remove('open');
+    currentModalCode = null;
+  }
+  closeModalBtn.addEventListener('click', closeModal);
+  modalBackdrop.addEventListener('click', (e) => { if(e.target === modalBackdrop) closeModal(); });
+
+  deleteBtn.addEventListener('click', async () => {
+    if(!currentModalCode) return;
+    const code = currentModalCode;
+    deleteBtn.disabled = true;
+    try{
+      await deleteItemRecord(code);
+      const codes = await loadIndex();
+      const next = codes.filter(c => c !== code);
+      await saveIndex(next);
+      showToast('Deleted · ' + code);
+      closeModal();
+      await refreshGallery();
+    }catch(e){
+      showToast('Delete failed — try again');
+    }finally{
+      deleteBtn.disabled = false;
+    }
+  });
+
+  // ---------- Init ----------
+  refreshGallery();
+})();
+</script>
+</body>
+</html>
