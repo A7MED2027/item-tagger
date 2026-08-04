@@ -917,7 +917,7 @@
 
   downloadBtn.addEventListener('click', async () => {
     if(!currentModalPhoto || !currentModalCode) return;
-    const filename = 'tagroom-' + currentModalCode.replace(/[^a-z0-9\-_]/gi, '_') + '.jpg';
+    const filename = currentModalCode.replace(/[^a-z0-9\-_]/gi, '_') + '.jpg';
 
     // Prefer native share sheet (lets user pick "Save to Photos"/Gallery on Android)
     if(navigator.share && navigator.canShare){
