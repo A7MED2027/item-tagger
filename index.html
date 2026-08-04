@@ -549,6 +549,7 @@
     <img id="modalImg" src="" alt="Item photo">
     <div class="code-display" id="modalCode"></div>
     <div class="date-display" id="modalDate"></div>
+    <button class="btn-accent" id="downloadBtn" style="width:100%; margin-bottom:10px;">Save to Phone</button>
     <div class="modal-actions">
       <button class="btn-ghost" id="closeModalBtn" style="flex:1;">Close</button>
       <button class="btn-danger" id="deleteBtn" style="flex:1;">Delete</button>
@@ -603,6 +604,7 @@
   const modalDate = document.getElementById('modalDate');
   const closeModalBtn = document.getElementById('closeModalBtn');
   const deleteBtn = document.getElementById('deleteBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
 
   const toastEl = document.getElementById('toast');
 
@@ -901,14 +903,44 @@
   searchInput.addEventListener('input', renderGallery);
 
   // ---------- Modal ----------
+  let currentModalPhoto = null;
+
   function openModal(item){
     currentModalCode = item.code;
+    currentModalPhoto = item.photo;
     modalImg.src = item.photo;
     modalCode.textContent = item.code;
     const d = new Date(item.savedAt);
     modalDate.textContent = 'Logged ' + d.toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) + ' at ' + d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
     modalBackdrop.classList.add('open');
   }
+
+  downloadBtn.addEventListener('click', async () => {
+    if(!currentModalPhoto || !currentModalCode) return;
+    const filename = 'tagroom-' + currentModalCode.replace(/[^a-z0-9\-_]/gi, '_') + '.jpg';
+
+    // Prefer native share sheet (lets user pick "Save to Photos"/Gallery on Android)
+    if(navigator.share && navigator.canShare){
+      try{
+        const res = await fetch(currentModalPhoto);
+        const blob = await res.blob();
+        const file = new File([blob], filename, { type: 'image/jpeg' });
+        if(navigator.canShare({ files: [file] })){
+          await navigator.share({ files: [file], title: currentModalCode });
+          return;
+        }
+      }catch(e){ /* fall through to download link */ }
+    }
+
+    // Fallback: trigger a normal browser download to the Downloads folder
+    const a = document.createElement('a');
+    a.href = currentModalPhoto;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('Saved to Downloads');
+  });
   function closeModal(){
     modalBackdrop.classList.remove('open');
     currentModalCode = null;
